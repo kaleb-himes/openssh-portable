@@ -1,4 +1,4 @@
-/* $OpenBSD: roaming_client.c,v 1.7 2014/01/09 23:20:00 djm Exp $ */
+/* $OpenBSD: roaming_client.c,v 1.8 2014/04/29 18:01:49 markus Exp $ */
 /*
  * Copyright (c) 2004-2009 AppGate Network Security AB
  *
@@ -28,13 +28,13 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifdef USING_WOLFSSL
-#include <wolfssl/openssl/crypto.h>
-#include <wolfssl/openssl/sha.h>
-#else
-#include <openssl/crypto.h>
-#include <openssl/sha.h>
-#endif
+//#ifdef USING_WOLFSSL
+//#include <wolfssl/openssl/crypto.h>
+//#include <wolfssl/openssl/sha.h>
+//#else
+//#include <openssl/crypto.h>
+//#include <openssl/sha.h>
+//#endif
 
 #include "xmalloc.h"
 #include "buffer.h"

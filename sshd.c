@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd.c,v 1.425 2014/04/19 14:53:48 tedu Exp $ */
+/* $OpenBSD: sshd.c,v 1.426 2014/04/29 18:01:49 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -78,11 +78,13 @@
 #include <wolfssl/openssl/crypto.h>
 #include <wolfssl/openssl/rand.h>
 #else
+#ifdef WITH_OPENSSL
 #include <openssl/dh.h>
 #include <openssl/bn.h>
 #include <openssl/rand.h>
 #include "openbsd-compat/openssl-compat.h"
 #endif
+#endif /* USING_WOLFSSL */
 
 #ifdef HAVE_SECUREWARE
 #include <sys/security.h>
@@ -105,7 +107,6 @@
 #include "digest.h"
 #include "key.h"
 #include "kex.h"
-#include "dh.h"
 #include "myproposal.h"
 #include "authfile.h"
 #include "pathnames.h"
@@ -263,7 +264,9 @@ struct passwd *privsep_pw = NULL;
 void destroy_sensitive_data(void);
 void demote_sensitive_data(void);
 
+#ifdef WITH_SSH1
 static void do_ssh1_kex(void);
+#endif
 static void do_ssh2_kex(void);
 
 /*
@@ -944,7 +947,13 @@ static void
 usage(void)
 {
 	fprintf(stderr, "%s, %s\n",
-	    SSH_RELEASE, SSLeay_version(SSLEAY_VERSION));
+	    SSH_RELEASE,
+#ifdef WITH_OPENSSL
+	    SSLeay_version(SSLEAY_VERSION)
+#else
+	    "without OpenSSL"
+#endif
+	);
 	fprintf(stderr,
 "usage: sshd [-46DdeiqTt] [-b bits] [-C connection_spec] [-c host_cert_file]\n"
 "            [-E log_file] [-f config_file] [-g login_grace_time]\n"
@@ -977,6 +986,7 @@ send_rexec_state(int fd, Buffer *conf)
 	buffer_init(&m);
 	buffer_put_cstring(&m, buffer_ptr(conf));
 
+#ifdef WITH_SSH1
 	if (sensitive_data.server_key != NULL &&
 	    sensitive_data.server_key->type == KEY_RSA1) {
 		buffer_put_int(&m, 1);
@@ -987,6 +997,7 @@ send_rexec_state(int fd, Buffer *conf)
 		buffer_put_bignum(&m, sensitive_data.server_key->rsa->p);
 		buffer_put_bignum(&m, sensitive_data.server_key->rsa->q);
 	} else
+#endif
 		buffer_put_int(&m, 0);
 
 #ifndef OPENSSL_PRNG_ONLY
@@ -1023,6 +1034,7 @@ recv_rexec_state(int fd, Buffer *conf)
 	free(cp);
 
 	if (buffer_get_int(&m)) {
+#ifdef WITH_SSH1
 		if (sensitive_data.server_key != NULL)
 			key_free(sensitive_data.server_key);
 		sensitive_data.server_key = key_new_private(KEY_RSA1);
@@ -1034,6 +1046,9 @@ recv_rexec_state(int fd, Buffer *conf)
 		buffer_get_bignum(&m, sensitive_data.server_key->rsa->q);
 		rsa_generate_additional_parameters(
 		    sensitive_data.server_key->rsa);
+#else
+		fatal("ssh1 not supported");
+#endif
 	}
 
 #ifndef OPENSSL_PRNG_ONLY
@@ -1556,7 +1571,9 @@ main(int ac, char **av)
 	else
 		closefrom(REEXEC_DEVCRYPTO_RESERVED_FD);
 
+#ifdef WITH_OPENSSL
 	OpenSSL_add_all_algorithms();
+#endif
 
 #ifdef USING_WOLFSSL
 	wolfSSL_Debugging_ON();
@@ -1667,7 +1684,12 @@ main(int ac, char **av)
 	}
 
 	debug("sshd version %s, %s", SSH_VERSION,
-	    SSLeay_version(SSLEAY_VERSION));
+#ifdef WITH_OPENSSL
+	    SSLeay_version(SSLEAY_VERSION)
+#else
+	    "without OpenSSL"
+#endif
+	);
 
 	/* Store privilege separation user for later use if required. */
 	if ((privsep_pw = getpwnam(SSH_PRIVSEP_USER)) == NULL) {
@@ -1789,6 +1811,8 @@ main(int ac, char **av)
 		debug("host certificate: #%d type %d %s", j, key->type,
 		    key_type(key));
 	}
+
+#ifdef WITH_SSH1
 	/* Check certain values for sanity. */
 	if (options.protocol & SSH_PROTO_1) {
 		if (options.server_key_bits < 512 ||
@@ -1813,6 +1837,7 @@ main(int ac, char **av)
 			    options.server_key_bits);
 		}
 	}
+#endif
 
 	if (use_privsep) {
 		struct stat st;
@@ -2096,8 +2121,12 @@ main(int ac, char **av)
 		do_ssh2_kex();
 		do_authentication2(authctxt);
 	} else {
+#ifdef WITH_SSH1
 		do_ssh1_kex();
 		do_authentication(authctxt);
+#else
+		fatal("ssh1 not supported");
+#endif
 	}
 	/*
 	 * If we use privilege separation, the unprivileged child transfers
@@ -2181,6 +2210,7 @@ main(int ac, char **av)
 	exit(0);
 }
 
+#ifdef WITH_SSH1
 /*
  * Decrypt session_key_int using our private server key and private host key
  * (key with larger modulus first).
@@ -2230,6 +2260,7 @@ ssh1_session_key(BIGNUM *session_key_int)
 	}
 	return (rsafail);
 }
+
 /*
  * SSH1 key exchange
  */
@@ -2407,6 +2438,7 @@ do_ssh1_kex(void)
 	packet_send();
 	packet_write_wait();
 }
+#endif
 
 void
 sshd_hostkey_sign(Key *privkey, Key *pubkey, u_char **signature, u_int *slen,
@@ -2469,11 +2501,13 @@ do_ssh2_kex(void)
 
 	/* start key exchange */
 	kex = kex_setup(myproposal);
+#ifdef WITH_OPENSSL
 	kex->kex[KEX_DH_GRP1_SHA1] = kexdh_server;
 	kex->kex[KEX_DH_GRP14_SHA1] = kexdh_server;
 	kex->kex[KEX_DH_GEX_SHA1] = kexgex_server;
 	kex->kex[KEX_DH_GEX_SHA256] = kexgex_server;
 	kex->kex[KEX_ECDH_SHA2] = kexecdh_server;
+#endif
 	kex->kex[KEX_C25519_SHA256] = kexc25519_server;
 	kex->server = 1;
 	kex->client_version_string=client_version_string;

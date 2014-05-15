@@ -1,4 +1,4 @@
-/* $OpenBSD: bufaux.c,v 1.58 2014/04/28 03:09:18 djm Exp $ */
+/* $OpenBSD: bufaux.c,v 1.59 2014/04/29 18:01:49 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -40,12 +40,6 @@
 #include "includes.h"
 
 #include <sys/types.h>
-
-#ifdef USING_WOLFSSL
-#include <wolfssl/openssl/bn.h>
-#else
-#include <openssl/bn.h>
-#endif
 
 #include <string.h>
 #include <stdarg.h>

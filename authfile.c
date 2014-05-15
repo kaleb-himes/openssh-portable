@@ -1,4 +1,4 @@
-/* $OpenBSD: authfile.c,v 1.105 2014/04/28 03:09:18 djm Exp $ */
+/* $OpenBSD: authfile.c,v 1.106 2014/04/29 18:01:49 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -425,6 +425,7 @@ key_parse_private2(Buffer *blob, int type, const char *passphrase,
 	return k;
 }
 
+#ifdef WITH_SSH1
 /*
  * Serialises the authentication (private) key to a blob, encrypting it with
  * passphrase.  The identification of the blob (lowest 64 bits of n) will
@@ -514,9 +515,11 @@ key_private_rsa1_to_blob(Key *key, Buffer *blob, const char *passphrase,
 
 	return 1;
 }
+#endif
 
+#if !defined(USING_WOLFSSL) && defined(WITH_OPENSSL)
 /* convert SSH v2 key in OpenSSL PEM format */
-#ifndef USING_WOLFSSL
+
 static int
 key_private_pem_to_blob(Key *key, Buffer *blob, const char *_passphrase,
     const char *comment)
@@ -565,7 +568,7 @@ key_private_pem_to_blob(Key *key, Buffer *blob, const char *_passphrase,
 	BIO_free(bio);
     return success;
 }
-#else /* USING_WOLFSSL */
+#else /* !USING_WOLFSSL && WITH_OPENSSL */
 static int
 key_private_pem_to_blob(Key *key, Buffer *blob, const char *_passphrase,
                         const char *comment)
@@ -606,7 +609,7 @@ key_private_pem_to_blob(Key *key, Buffer *blob, const char *_passphrase,
 
     return success;
 }
-#endif /* USING_WOLFSSL */
+#endif /* !USING_WOLFSSL && WITH_OPENSSL */
 
 /* Save a key blob to a file */
 static int
@@ -637,8 +640,11 @@ key_private_to_blob(Key *key, Buffer *blob, const char *passphrase,
     int new_format_rounds)
 {
 	switch (key->type) {
+#ifdef WITH_SSH1
 	case KEY_RSA1:
 		return key_private_rsa1_to_blob(key, blob, passphrase, comment);
+#endif
+#ifdef WITH_OPENSSL
 	case KEY_DSA:
 	case KEY_ECDSA:
 	case KEY_RSA:
@@ -647,6 +653,7 @@ key_private_to_blob(Key *key, Buffer *blob, const char *passphrase,
 			    comment, new_format_cipher, new_format_rounds);
 		}
 		return key_private_pem_to_blob(key, blob, passphrase, comment);
+#endif
 	case KEY_ED25519:
 		return key_private_to_blob2(key, blob, passphrase,
 		    comment, new_format_cipher, new_format_rounds);
@@ -676,6 +683,7 @@ key_save_private(Key *key, const char *filename, const char *passphrase,
 	return success;
 }
 
+#ifdef WITH_SSH1
 /*
  * Parse the public, unencrypted portion of a RSA1 key.
  */
@@ -720,6 +728,7 @@ key_parse_public_rsa1(Buffer *blob, char **commentp)
 
 	return pub;
 }
+#endif
 
 /* Load a key from a fd into a buffer */
 int
@@ -776,6 +785,7 @@ key_load_file(int fd, const char *filename, Buffer *blob)
 	return 1;
 }
 
+#ifdef WITH_SSH1
 /*
  * Loads the public part of the ssh v1 key file.  Returns NULL if an error was
  * encountered (the file does not exist or is not readable), and the key
@@ -919,6 +929,7 @@ fail:
 	key_free(prv);
 	return NULL;
 }
+#endif
 
 #ifdef USING_WOLFSSL
 static Key *
@@ -1024,6 +1035,7 @@ key_parse_private_pem(Buffer *blob, int type, const char *passphrase,
 
 #else /* USING_WOLFSSL */
 
+#ifdef WITH_OPENSSL
 static Key *
 key_parse_private_pem(Buffer *blob, int type, const char *passphrase,
     char **commentp)
@@ -1100,8 +1112,10 @@ key_parse_private_pem(Buffer *blob, int type, const char *passphrase,
 	    prv ? key_type(prv) : "<unknown>");
 	return prv;
 }
-#endif /*USING_WOLFSSL */
+#endif /* WITH_OPENSSL */
+#endif /* USING_WOLFSSL */
 
+#ifdef WITH_OPENSSL
 Key *
 key_load_private_pem(int fd, int type, const char *passphrase,
     char **commentp)
@@ -1118,6 +1132,7 @@ key_load_private_pem(int fd, int type, const char *passphrase,
 	buffer_free(&buffer);
 	return prv;
 }
+#endif
 
 int
 key_perm_ok(int fd, const char *filename)
@@ -1154,18 +1169,24 @@ key_parse_private_type(Buffer *blob, int type, const char *passphrase,
 	Key *k;
 
 	switch (type) {
+#ifdef WITH_SSH1
 	case KEY_RSA1:
 		return key_parse_private_rsa1(blob, passphrase, commentp);
+#endif
+#ifdef WITH_OPENSSL
 	case KEY_DSA:
 	case KEY_ECDSA:
 	case KEY_RSA:
 		return key_parse_private_pem(blob, type, passphrase, commentp);
+#endif
 	case KEY_ED25519:
 		return key_parse_private2(blob, type, passphrase, commentp);
 	case KEY_UNSPEC:
 		if ((k = key_parse_private2(blob, type, passphrase, commentp)))
 			return k;
+#ifdef WITH_OPENSSL
 		return key_parse_private_pem(blob, type, passphrase, commentp);
+#endif
 	default:
 		error("%s: cannot parse key type %d", __func__, type);
 		break;
@@ -1215,6 +1236,7 @@ Key *
 key_parse_private(Buffer *buffer, const char *filename,
     const char *passphrase, char **commentp)
 {
+#ifdef WITH_SSH1
 	Key *pub, *prv;
 
 	/* it's a SSH v1 key if the public key part is readable */
@@ -1232,6 +1254,10 @@ key_parse_private(Buffer *buffer, const char *filename,
 		    NULL);
 	}
 	return prv;
+#else
+	return key_parse_private_type(buffer, KEY_UNSPEC,
+	    passphrase, commentp);
+#endif
 }
 
 Key *
@@ -1316,6 +1342,7 @@ key_load_public(const char *filename, char **commentp)
 	Key *pub;
 	char file[MAXPATHLEN];
 
+#ifdef WITH_SSH1
 	/* try rsa1 private key */
 	pub = key_load_public_type(KEY_RSA1, filename, commentp);
 	if (pub != NULL)
@@ -1326,6 +1353,7 @@ key_load_public(const char *filename, char **commentp)
 	if (key_try_load_public(pub, filename, commentp) == 1)
 		return pub;
 	key_free(pub);
+#endif
 
 	/* try ssh2 public key */
 	pub = key_new(KEY_UNSPEC);
@@ -1365,9 +1393,11 @@ key_load_private_cert(int type, const char *filename, const char *passphrase,
 	Key *key, *pub;
 
 	switch (type) {
+#ifdef WITH_OPENSSL
 	case KEY_RSA:
 	case KEY_DSA:
 	case KEY_ECDSA:
+#endif
 	case KEY_ED25519:
 		break;
 	default:
