@@ -1,4 +1,4 @@
-/* $OpenBSD: mac.c,v 1.29 2014/04/29 18:01:49 markus Exp $ */
+/* $OpenBSD: mac.c,v 1.30 2014/04/30 19:07:48 naddy Exp $ */
 /*
  * Copyright (c) 2001 Markus Friedl.  All rights reserved.
  *
