@@ -49,6 +49,8 @@
 #include <openssl/err.h>
 #endif
 
+#include "openbsd-compat/openssl-compat.h"
+
 #include "ssh.h"
 #include "misc.h"
 #include "xmalloc.h"
