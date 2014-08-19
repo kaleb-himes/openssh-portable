@@ -32,6 +32,7 @@
 #include <wolfssl/openssl/evp.h>
 #else
 #include <openssl/bn.h>
+#include <openssl/dsa.h>
 #include <openssl/evp.h>
 #endif
 
